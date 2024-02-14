@@ -1,9 +1,7 @@
 package org.example;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -18,15 +16,11 @@ import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.ProducerFactory;
 import org.springframework.kafka.listener.ConcurrentMessageListenerContainer;
 import org.springframework.kafka.requestreply.ReplyingKafkaTemplate;
-import org.springframework.kafka.requestreply.RequestReplyFuture;
-import org.springframework.kafka.support.SendResult;
+import org.springframework.kafka.support.TopicPartitionOffset;
 
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Properties;
-import java.util.UUID;
-import java.util.concurrent.TimeUnit;
 
 @SpringBootApplication
 public class App {
@@ -53,14 +47,8 @@ public class App {
                     }
                 });
 
-                template.setSharedReplyTopic(true);
-//
-//                ProducerRecord<String, String> record = new ProducerRecord<>("kRequests", "1", "a");
-//                RequestReplyFuture<String, String, String> replyFuture = template.sendAndReceive(record);
-//                SendResult<String, String> sendResult = replyFuture.getSendFuture().get(10, TimeUnit.SECONDS);
-//                System.out.println("Sent ok: " + sendResult.getRecordMetadata());
-//                ConsumerRecord<String, String> consumerRecord = replyFuture.get(10, TimeUnit.SECONDS);
-//                System.out.println("Return value: " + consumerRecord.value());
+//                template.setSharedReplyTopic(true); //not need
+
             } catch (Throwable t) {
                 t.printStackTrace();
             }
@@ -96,23 +84,20 @@ public class App {
     }
 
     @Bean
-    public ConcurrentKafkaListenerContainerFactory<String, String> kafkaListenerContainerFactory(
-    ) {
+    public ConcurrentKafkaListenerContainerFactory<String, String> kafkaListenerContainerFactory() {
         ConcurrentKafkaListenerContainerFactory<String, String> factory = new ConcurrentKafkaListenerContainerFactory<>();
         factory.setConsumerFactory(consumerFactory());
         return factory;
     }
 
     @Bean
-    public ConcurrentMessageListenerContainer<String, String> repliesContainer(
-            ConcurrentKafkaListenerContainerFactory<String, String> containerFactory) {
+    public ConcurrentMessageListenerContainer<String, String> repliesContainer() {
         ConcurrentMessageListenerContainer<String, String> repliesContainer =
-                containerFactory.createContainer("kReplies");
-//        repliesContainer.getContainerProperties().setGroupId("repliesGroup");
-        repliesContainer.getContainerProperties().setGroupId(UUID.randomUUID().toString()); // unique
-        Properties props = new Properties();
-        props.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest"); // so the new group doesn't get old replies
-        repliesContainer.getContainerProperties().setKafkaConsumerProperties(props);
+                kafkaListenerContainerFactory().createContainer(new TopicPartitionOffset("kReplies", Integer.parseInt(System.getProperty("partition"))));
+        repliesContainer.getContainerProperties().setGroupId("replyGroup");
+//        Properties props = new Properties();
+//        props.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest"); // so the new group doesn't get old replies
+//        repliesContainer.getContainerProperties().setKafkaConsumerProperties(props);
         repliesContainer.setAutoStartup(false);
         return repliesContainer;
     }
