@@ -18,6 +18,7 @@ import java.util.Random;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.stream.IntStream;
 
 @RestController
 public class SenderController {
@@ -29,7 +30,7 @@ public class SenderController {
     public String send() {
         try {
 
-            for (int i = 0; i < 10; i++) {
+            IntStream.rangeClosed(1, 10).parallel().forEach(i->{
                 List<RequestReplyFuture<String,String,String>> futures = new ArrayList<>();
                 int origin = 0;
                 for (int j = 0; j < 5; j++) {
@@ -37,15 +38,20 @@ public class SenderController {
                     int k = v % 10;
                     ProducerRecord<String, String> record = new ProducerRecord<>("kRequests", String.valueOf(k), String.valueOf(v));
                     RequestReplyFuture<String, String, String> replyFuture = template.sendAndReceive(record);
-                    SendResult<String, String> sendResult = replyFuture.getSendFuture().get(10, TimeUnit.SECONDS);
-                    System.out.println("Sent ok: " + sendResult.getRecordMetadata());
-                    futures.add(replyFuture);
-                    origin += v;
+                    try {
+                        SendResult<String, String> sendResult = replyFuture.getSendFuture().get(10, TimeUnit.SECONDS);
+                        System.out.println("Sent ok: " + sendResult.getRecordMetadata());
+                        futures.add(replyFuture);
+                        origin += v;
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
                 }
                 int sum = 0;
                 for (RequestReplyFuture<String,String,String> f : futures){
                     try {
                         ConsumerRecord<String, String> consumerRecord = f.get(10, TimeUnit.SECONDS);
+                        System.out.println("Return value: " + consumerRecord.value());
                         sum += Integer.parseInt(consumerRecord.value());
                     } catch (Exception e) {
                         e.printStackTrace();
@@ -55,14 +61,7 @@ public class SenderController {
                 if (origin != sum){
                     System.err.println("origin != sum, " + origin + ", " + sum);
                 }
-            }
-
-//            ProducerRecord<String, String> record = new ProducerRecord<>("kRequests", "1", "a");
-//            RequestReplyFuture<String, String, String> replyFuture = template.sendAndReceive(record);
-//            SendResult<String, String> sendResult = replyFuture.getSendFuture().get(10, TimeUnit.SECONDS);
-//            System.out.println("Sent ok: " + sendResult.getRecordMetadata());
-//            ConsumerRecord<String, String> consumerRecord = replyFuture.get(10, TimeUnit.SECONDS);
-//            System.out.println("Return value: " + consumerRecord.value());
+            });
 
             return "success";
         } catch (Throwable t) {
