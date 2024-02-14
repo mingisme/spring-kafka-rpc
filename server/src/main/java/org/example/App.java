@@ -17,6 +17,7 @@ import org.springframework.messaging.handler.annotation.SendTo;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Random;
 
 @SpringBootApplication
 public class App {
@@ -67,13 +68,14 @@ public class App {
 
     @KafkaListener(topics = "kRequests", groupId="server")
     @SendTo
-    public String listen(ConsumerRecord<String, String> record) {
+    public String listen(ConsumerRecord<String, String> record) throws InterruptedException {
         Headers headers = record.headers();
         System.out.println("headers:");
         headers.forEach(head -> {
             System.out.println("key: " + head.key() + ", value: " + new String(head.value()));
         });
         System.out.println("Server received: " + record);
+        Thread.sleep(new Random().nextInt(100));
         return record.value().toUpperCase(Locale.ROOT);
     }
 }

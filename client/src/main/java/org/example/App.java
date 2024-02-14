@@ -24,6 +24,8 @@ import org.springframework.kafka.support.SendResult;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Properties;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 @SpringBootApplication
@@ -43,6 +45,7 @@ public class App {
                 template.setReplyErrorChecker(record -> {
                     Header error = record.headers().lastHeader("serverSentAnError");
                     if (error != null) {
+                        System.err.println(new String(error.value()));
                         return new RuntimeException(new String(error.value()));
                     }
                     else {
@@ -50,12 +53,14 @@ public class App {
                     }
                 });
 
-                ProducerRecord<String, String> record = new ProducerRecord<>("kRequests", "1", "a");
-                RequestReplyFuture<String, String, String> replyFuture = template.sendAndReceive(record);
-                SendResult<String, String> sendResult = replyFuture.getSendFuture().get(10, TimeUnit.SECONDS);
-                System.out.println("Sent ok: " + sendResult.getRecordMetadata());
-                ConsumerRecord<String, String> consumerRecord = replyFuture.get(10, TimeUnit.SECONDS);
-                System.out.println("Return value: " + consumerRecord.value());
+                template.setSharedReplyTopic(true);
+//
+//                ProducerRecord<String, String> record = new ProducerRecord<>("kRequests", "1", "a");
+//                RequestReplyFuture<String, String, String> replyFuture = template.sendAndReceive(record);
+//                SendResult<String, String> sendResult = replyFuture.getSendFuture().get(10, TimeUnit.SECONDS);
+//                System.out.println("Sent ok: " + sendResult.getRecordMetadata());
+//                ConsumerRecord<String, String> consumerRecord = replyFuture.get(10, TimeUnit.SECONDS);
+//                System.out.println("Return value: " + consumerRecord.value());
             } catch (Throwable t) {
                 t.printStackTrace();
             }
@@ -103,7 +108,11 @@ public class App {
             ConcurrentKafkaListenerContainerFactory<String, String> containerFactory) {
         ConcurrentMessageListenerContainer<String, String> repliesContainer =
                 containerFactory.createContainer("kReplies");
-        repliesContainer.getContainerProperties().setGroupId("repliesGroup");
+//        repliesContainer.getContainerProperties().setGroupId("repliesGroup");
+        repliesContainer.getContainerProperties().setGroupId(UUID.randomUUID().toString()); // unique
+        Properties props = new Properties();
+        props.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest"); // so the new group doesn't get old replies
+        repliesContainer.getContainerProperties().setKafkaConsumerProperties(props);
         repliesContainer.setAutoStartup(false);
         return repliesContainer;
     }
