@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.IntStream;
 
@@ -30,39 +31,51 @@ public class SenderController {
     public String send() {
         try {
 
+            //mock up requests from multiple threads
             IntStream.rangeClosed(1, 10).parallel().forEach(i -> {
+
                 List<RequestReplyFuture<String, String, String>> futures = new ArrayList<>();
                 int origin = 0;
+                // send 5 requests to different servers
                 for (int j = 0; j < 5; j++) {
                     int v = new Random().nextInt(100);
                     int k = v % 10;
                     ProducerRecord<String, String> record = new ProducerRecord<>("kRequests", String.valueOf(k), String.valueOf(v));
                     RequestReplyFuture<String, String, String> replyFuture = replyingKafkaTemplate.sendAndReceive(record);
                     try {
-                        SendResult<String, String> sendResult = replyFuture.getSendFuture().get(10, TimeUnit.SECONDS);
-                        System.out.println("Sent ok: " + sendResult.getRecordMetadata());
+                        replyFuture.getSendFuture().addCallback(result->{
+                            System.out.println("Sent ok: " + result);
+                        }, Throwable::printStackTrace);
+
                         futures.add(replyFuture);
                         origin += v;
                     } catch (Exception e) {
                         e.printStackTrace();
                     }
                 }
-                int sum = 0;
+
+                CompletableFuture<ConsumerRecord<String, String>> completableFuture = CompletableFuture.supplyAsync(() -> new ConsumerRecord<>("", 0,0,"k","0"));
                 for (RequestReplyFuture<String, String, String> f : futures) {
-                    try {
-                        ConsumerRecord<String, String> consumerRecord = f.get(10, TimeUnit.SECONDS);
-                        System.out.println("Return value: " + consumerRecord.value());
-                        sum += Integer.parseInt(consumerRecord.value());
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                    }
+                    CompletableFuture<ConsumerRecord<String, String>> completable = f.completable();
+                    completableFuture = completableFuture.thenCombineAsync(completable,(r1,r2) ->{
+                        int value1 = Integer.parseInt(r1.value());
+                        int value2 = Integer.parseInt(r2.value());
+                        return new ConsumerRecord<>("", 0,0,"k", String.valueOf(value1 + value2));
+                    });
                 }
 
-                if (origin != sum) {
-                    System.err.println("origin != sum, " + origin + ", " + sum);
-                }
+                int finalOrigin = origin;
+                completableFuture.thenAccept(r->{
+                    int sum = Integer.parseInt(r.value());
+                    if (finalOrigin != sum) {
+                        System.err.println("origin != sum, " + finalOrigin + ", " + sum);
+                    }else{
+                        System.out.println("task "+ i + " is finished on thread " + Thread.currentThread());
+                    }
+                });
             });
 
+            System.out.println("current thread finish");
             return "success";
         } catch (Throwable t) {
             t.printStackTrace();

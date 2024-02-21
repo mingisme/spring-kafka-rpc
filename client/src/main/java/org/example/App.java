@@ -106,7 +106,9 @@ public class App {
     @Bean
     public ReplyingKafkaTemplate<String, String, String> replyingTemplate(
             ConcurrentMessageListenerContainer<String, String> repliesContainer) {
-        return new ReplyingKafkaTemplate<>(producerFactory(), repliesContainer);
+        ReplyingKafkaTemplate<String, String, String> replyingKafkaTemplate = new ReplyingKafkaTemplate<>(producerFactory(), repliesContainer);
+        replyingKafkaTemplate.setDefaultReplyTimeout(Duration.ofSeconds(60));
+        return replyingKafkaTemplate;
     }
 
     @Bean
