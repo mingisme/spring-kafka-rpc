@@ -5,15 +5,13 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
-import org.springframework.kafka.core.ConsumerFactory;
-import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
-import org.springframework.kafka.core.DefaultKafkaProducerFactory;
-import org.springframework.kafka.core.ProducerFactory;
+import org.springframework.kafka.core.*;
 import org.springframework.kafka.listener.ConcurrentMessageListenerContainer;
 import org.springframework.kafka.requestreply.ReplyingKafkaTemplate;
 import org.springframework.kafka.support.TopicPartitionOffset;
@@ -27,6 +25,9 @@ public class App {
     public static void main(String[] args) {
         SpringApplication.run(App.class, args);
     }
+
+    @Value("${partition}")
+    private int partition;
 
     @Bean
     public ApplicationRunner runner(ReplyingKafkaTemplate<String, String, String> template) {
@@ -93,7 +94,7 @@ public class App {
     @Bean
     public ConcurrentMessageListenerContainer<String, String> repliesContainer() {
         ConcurrentMessageListenerContainer<String, String> repliesContainer =
-                kafkaListenerContainerFactory().createContainer(new TopicPartitionOffset("kReplies", Integer.parseInt(System.getProperty("partition"))));
+                kafkaListenerContainerFactory().createContainer(new TopicPartitionOffset("kReplies", partition));
         repliesContainer.getContainerProperties().setGroupId("replyGroup");
 //        Properties props = new Properties();
 //        props.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest"); // so the new group doesn't get old replies
@@ -106,6 +107,11 @@ public class App {
     public ReplyingKafkaTemplate<String, String, String> replyingTemplate(
             ConcurrentMessageListenerContainer<String, String> repliesContainer) {
         return new ReplyingKafkaTemplate<>(producerFactory(), repliesContainer);
+    }
+
+    @Bean
+    public KafkaTemplate<String,String> kafkaTemplate(){
+        return new KafkaTemplate<>(producerFactory());
     }
 
 }
