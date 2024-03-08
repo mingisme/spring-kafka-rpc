@@ -12,6 +12,8 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.core.*;
+import org.springframework.kafka.listener.ContainerProperties;
+import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.messaging.handler.annotation.SendTo;
 
 import java.util.HashMap;
@@ -50,6 +52,8 @@ public class App {
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:58896");
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest");
+        props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
         return props;
     }
 
@@ -63,19 +67,22 @@ public class App {
         ConcurrentKafkaListenerContainerFactory<String, String> factory = new ConcurrentKafkaListenerContainerFactory<>();
         factory.setConsumerFactory(consumerFactory());
         factory.setReplyTemplate(replyTemplate());
+        factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.MANUAL);
         return factory;
     }
 
-    @KafkaListener(topics = "kRequests", groupId="server")
+    @KafkaListener(topics = "kRequests", groupId = "server")
     @SendTo
-    public String listen(ConsumerRecord<String, String> record) throws InterruptedException {
+    public String listen(ConsumerRecord<String, String> record, Acknowledgment acknowledgment) throws InterruptedException {
         Headers headers = record.headers();
         System.out.println("headers:");
         headers.forEach(head -> {
             System.out.println("key: " + head.key() + ", value: " + new String(head.value()));
         });
         System.out.println("Server received: " + record);
+        acknowledgment.acknowledge();
         Thread.sleep(new Random().nextInt(100));
+
         return record.value().toUpperCase(Locale.ROOT);
     }
 }
