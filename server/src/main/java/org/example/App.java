@@ -68,10 +68,16 @@ public class App {
         factory.setConsumerFactory(consumerFactory());
         factory.setReplyTemplate(replyTemplate());
         factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.MANUAL);
+        factory.setConcurrency(4);
+        factory.getContainerProperties().setGroupId("server");
         return factory;
     }
 
-    @KafkaListener(topics = "kRequests", groupId = "server")
+    public String getTopic1(){
+        return "kRequests";
+    }
+
+    @KafkaListener(topics = "#{__listener.topic1}")
     @SendTo
     public String listen(ConsumerRecord<String, String> record, Acknowledgment acknowledgment) throws InterruptedException {
         Headers headers = record.headers();
